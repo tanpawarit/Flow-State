@@ -1,0 +1,36 @@
+// Task Assignment & Ownership
+(User)-[:ASSIGNED_TO {assigned_at: datetime, assigned_by: string}]->(Task)
+(User)-[:CREATED {created_at: datetime}]->(Task)
+(User)-[:WATCHING {since: datetime}]->(Task)
+
+// Task Hierarchy & Dependencies
+(Task)-[:DEPENDS_ON {type: string, created_at: datetime}]->(Task)
+(Task)-[:SUBTASK_OF]->(Task)  // parent-child relationship
+(Task)-[:BLOCKS {impact_level: string}]->(Task)
+
+// Organizational Structure
+(Task)-[:BELONGS_TO]->(List)
+(List)-[:IN_FOLDER]->(Folder)
+(Folder)-[:IN_SPACE]->(Space)
+(Task)-[:IN_SPRINT]->(Sprint)
+
+// Status & Metadata
+(Task)-[:HAS_STATUS]->(Status)
+(Task)-[:HAS_PRIORITY]->(Priority)
+(Task)-[:TAGGED_WITH {tagged_at: datetime, tagged_by: string}]->(Tag)
+
+// Team & Space Management
+(User)-[:MEMBER_OF {role: string, joined_at: datetime}]->(Space)
+(User)-[:CAN_ACCESS {permission_level: string}]->(List)
+
+// Comments & Communication (ถ้าต้องการ)
+(User)-[:COMMENTED_ON {comment_id: string, content: string, created_at: datetime}]->(Task)
+
+// Time Tracking
+(User)-[:TRACKED_TIME {
+  duration: integer,    // minutes
+  start_time: datetime,
+  end_time: datetime,
+  description: string,
+  billable: boolean
+}]->(Task)

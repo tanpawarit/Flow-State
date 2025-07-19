@@ -5,7 +5,6 @@ Demonstrates all available functions with detailed usage
 """
 
 import asyncio
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -13,12 +12,8 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Load environment variables from .env file
-from dotenv import load_dotenv
-
-load_dotenv()
-
 from src.integrations.clickup_client import ClickUpClient
+from src.utils.config import get_clickup_config
 
 
 class ColorPrinter:
@@ -418,10 +413,10 @@ def print_all_functions():
 
 async def main():
     """Main function to run all demonstrations"""
-    api_key = os.getenv("CLICKUP_API_KEY")
+    config = get_clickup_config()
+    api_key = config.get("api_key")
     if not api_key:
-        print("❌ Please set CLICKUP_API_KEY environment variable")
-        print("   export CLICKUP_API_KEY=your_api_key_here")
+        print("❌ Please set clickup.api_key in config.yaml")
         return
 
     print_all_functions()

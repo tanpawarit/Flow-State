@@ -1,90 +1,68 @@
-# # test_connection.py
-# from neo4j import GraphDatabase
+import logging
+from typing import Any, Dict, List, Optional
 
-# # Connection details from AuraDB
-# URI = "neo4j+s://xxxxx.databases.neo4j.io"
-# USERNAME = "neo4j"
-# PASSWORD = "your_generated_password"
+from neo4j import GraphDatabase
 
-
-# def test_connection():
-#     driver = GraphDatabase.driver(URI, auth=(USERNAME, PASSWORD))
-
-#     try:
-#         # Test query
-#         with driver.session() as session:
-#             result = session.run("RETURN 'Hello Neo4j!' as message")
-#             record = result.single()
-#             print(f"Connected: {record['message']}")
-
-#         # Check database info
-#         with driver.session() as session:
-#             result = session.run("CALL dbms.components() YIELD name, versions")
-#             for record in result:
-#                 print(f"Component: {record['name']}, Version: {record['versions']}")
-
-#     except Exception as e:
-#         print(f"Connection failed: {e}")
-#     finally:
-#         driver.close()
+from src.utils.config import get_neo4j_config
 
 
-# if __name__ == "__main__":
-#     test_connection()
+class Neo4jClient:
+    def __init__(self):
+        """Initialize Neo4j client.
 
+        Parameters
+        ----------
+        uri : str, optional
+            Neo4j URI. If not provided, loads from config.yaml
+        username : str, optional
+            Neo4j username. If not provided, loads from config.yaml
+        password : str, optional
+            Neo4j password. If not provided, loads from config.yaml
+        """
+        config = get_neo4j_config()
 
-# # app/neo4j_client.py
-# import logging
-# import os
-# from typing import Any, Dict, List
+        uri = config.get("uri")
+        username = config.get("username")
+        password = config.get("password")
 
+        if not all([uri, username, password]):
+            raise ValueError(
+                "Missing Neo4j credentials. Please check your config.yaml file."
+            )
 
-# class Neo4jClient:
-#     def __init__(self):
-#         self.uri = os.getenv("NEO4J_URI")
-#         self.username = os.getenv("NEO4J_USERNAME", "neo4j")
-#         self.password = os.getenv("NEO4J_PASSWORD")
+        # Safe assignment after validation
+        self.uri = str(uri)
+        self.username = str(username)
+        self.password = str(password)
 
-#         if not all([self.uri, self.password]):
-#             raise ValueError("Missing Neo4j credentials")
+        self.driver = GraphDatabase.driver(
+            self.uri,
+            auth=(self.username, self.password),
+            max_connection_lifetime=30 * 60,  # 30 minutes
+            max_connection_pool_size=50,
+            connection_acquisition_timeout=2 * 60,  # 2 minutes
+        )
 
-#         self.driver = GraphDatabase.driver(
-#             self.uri,
-#             auth=(self.username, self.password),
-#             max_connection_lifetime=30 * 60,  # 30 minutes
-#             max_connection_pool_size=50,
-#             connection_acquisition_timeout=2 * 60,  # 2 minutes
-#         )
+    def close(self):
+        if self.driver:
+            self.driver.close()
 
-#     def close(self):
-#         if self.driver:
-#             self.driver.close()
+    def execute_read(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Execute read query"""
+        with self.driver.session() as session:
+            try:
+                result = session.run(query, parameters or {})  # type: ignore[arg-type]
+                return [record.data() for record in result]
+            except Exception as e:
+                logging.error(f"Read query failed: {e}")
+                return []
 
-#     def execute_read(self, query: str, parameters: Dict = None) -> List[Dict[str, Any]]:
-#         """Execute read query"""
-#         with self.driver.session() as session:
-#             try:
-#                 result = session.run(query, parameters or {})
-#                 return [record.data() for record in result]
-#             except Exception as e:
-#                 logging.error(f"Read query failed: {e}")
-#                 return []
-
-#     def execute_write(self, query: str, parameters: Dict = None) -> bool:
-#         """Execute write query"""
-#         with self.driver.session() as session:
-#             try:
-#                 session.run(query, parameters or {})
-#                 return True
-#             except Exception as e:
-#                 logging.error(f"Write query failed: {e}")
-#                 return False
-
-
-# # Global client instance
-# neo4j_client = Neo4jClient()
-
-# # Cleanup on exit
-# import atexit
-
-# atexit.register(lambda: neo4j_client.close())
+    def execute_write(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> bool:
+        """Execute write query"""
+        with self.driver.session() as session:
+            try:
+                session.run(query, parameters or {})  # type: ignore[arg-type]
+                return True
+            except Exception as e:
+                logging.error(f"Write query failed: {e}")
+                return False

@@ -4,25 +4,21 @@ Test validation fixes for ClickUp models
 """
 
 import asyncio
-import os
-
-from dotenv import load_dotenv
-
-load_dotenv()
-
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.integrations.clickup_client import ClickUpClient
+from src.utils.config import get_clickup_config
 
 
 async def test_validation():
     """Test that validation errors are fixed"""
-    api_key = os.getenv("CLICKUP_API_KEY")
+    config = get_clickup_config()
+    api_key = config.get("api_key")
     if not api_key:
-        print("❌ No API key")
+        print("❌ Please set clickup.api_key in config.yaml")
         return
 
     async with ClickUpClient(api_key) as client:

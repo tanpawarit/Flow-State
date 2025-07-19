@@ -1,0 +1,12 @@
+# ClickUp Configuration
+clickup:
+  api_key: "pk_xxx"
+  team_id: "xxx"
+
+# Neo4j Database Configuration  
+neo4j:
+  uri: "neo4j+s://xxx.databases.neo4j.io"
+  username: "xxx"
+  password: "xxx"
+ 
+ 

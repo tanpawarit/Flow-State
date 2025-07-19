@@ -5,13 +5,14 @@ Comprehensive client for interacting with ClickUp's REST API
 
 import asyncio
 import logging
-import os
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
 from pydantic import BaseModel, Field
+
+from src.utils.config import get_clickup_config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -132,7 +133,12 @@ class ClickUpComment(BaseModel):
 class ClickUpAPIError(Exception):
     """Custom exception for ClickUp API errors"""
 
-    def __init__(self, message: str, status_code: Optional[int] = None, response: Optional[Dict] = None):
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        response: Optional[Dict] = None,
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.response = response
@@ -168,10 +174,15 @@ class ClickUpClient:
     BASE_URL = "https://api.clickup.com/api/v2"
 
     def __init__(self, api_key: Optional[str] = None, rate_limit: bool = True):
-        self.api_key = api_key or os.getenv("CLICKUP_API_KEY")
+        self.api_key = api_key
+        if not self.api_key:
+            # Try to get from config if not provided
+            config = get_clickup_config()
+            self.api_key = config.get("api_key")
+
         if not self.api_key:
             raise ValueError(
-                "API key must be provided or set in CLICKUP_API_KEY environment variable"
+                "API key must be provided or set in clickup.api_key in config.yaml"
             )
 
         self.session: Optional[aiohttp.ClientSession] = None
@@ -480,49 +491,3 @@ class AsyncClickUpClient:
         """Get tasks with specific tag"""
         all_tasks = await self.client.get_tasks(list_id)
         return [task for task in all_tasks if tag in [t.get("name") for t in task.tags]]
-
-
-# Example usage and testing
-# async def test_client():
-#     """Test the client functionality"""
-#     api_key = os.getenv("CLICKUP_API_KEY")
-#     if not api_key:
-#         print("Please set CLICKUP_API_KEY environment variable")
-#         return
-
-#     async with ClickUpClient(api_key) as client:
-#         try:
-#             # Test basic functionality
-#             teams = await client.get_teams()
-#             print(f"Found {len(teams)} teams")
-
-#             if teams:
-#                 team = teams[0]
-#                 spaces = await client.get_spaces(team.id)
-#                 print(f"Found {len(spaces)} spaces in {team.name}")
-
-#                 if spaces:
-#                     space = spaces[0]
-#                     folders = await client.get_folders(space.id)
-#                     print(f"Found {len(folders)} folders in {space.name}")
-
-#                     if folders:
-#                         folder = folders[0]
-#                         lists = await client.get_lists(folder.id)
-#                         print(f"Found {len(lists)} lists in {folder.name}")
-
-#                         if lists:
-#                             test_list = lists[0]
-#                             tasks = await client.get_tasks(test_list.id)
-#                             print(f"Found {len(tasks)} tasks in {test_list.name}")
-
-#                             # Display first few tasks
-#                             for task in tasks[:3]:
-#                                 print(f"  - {task.name} ({task.status})")
-
-#         except Exception as e:
-#             print(f"Error: {e}")
-
-
-# if __name__ == "__main__":
-#     asyncio.run(test_client())

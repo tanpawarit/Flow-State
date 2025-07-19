@@ -1,0 +1,69 @@
+// สร้าง sample data based on ข้อมูลที่เห็น
+CREATE 
+// Spaces
+(tech:Space {id: "space_tech", name: "Tech", color: "#00ff00"}),
+(lab:Space {id: "space_lab", name: "Lab", color: "#0066ff"}),
+
+// Lists  
+(gsd:List {id: "list_gsd", name: "Get Shit Done", space_id: "space_tech"}),
+(padtai:List {id: "list_padtai", name: "PADTAI", space_id: "space_tech"}),
+
+// Users
+(tp:User {id: "user_tp", username: "TP", initials: "TP"}),
+(n:User {id: "user_n", username: "N", initials: "N"}),
+
+// Statuses
+(complete:Status {status: "COMPLETE", type: "closed", color: "#00ff00"}),
+(review:Status {status: "REVIEW", type: "open", color: "#ff9900"}),
+(dev:Status {status: "DEV-IN PROGRESS", type: "open", color: "#0066ff"}),
+
+// Priorities
+(high:Priority {priority: "High", color: "#ff0000"}),
+(low:Priority {priority: "Low", color: "#cccccc"}),
+(urgent:Priority {priority: "Urgent", color: "#ff0066"}),
+
+// Tasks
+(task1:Task {
+  id: "task_001", 
+  name: "amplitude for goldstudio", 
+  points: 2, 
+  due_date: datetime("2024-06-17"),
+  status: "COMPLETE"
+}),
+(task2:Task {
+  id: "task_002",
+  name: "[Fix] Bug Application Backend API",
+  points: 3,
+  status: "COMPLETE"
+}),
+
+// Relationships
+(tp)-[:ASSIGNED_TO]->(task1),
+(tp)-[:ASSIGNED_TO]->(task2),
+(task1)-[:HAS_STATUS]->(complete),
+(task1)-[:HAS_PRIORITY]->(high),
+(task1)-[:BELONGS_TO]->(gsd),
+(gsd)-[:IN_SPACE]->(tech)
+
+
+// 1. หา tasks ที่กำลังทำอยู่ของแต่ละคน
+MATCH (u:User)-[:ASSIGNED_TO]->(t:Task)-[:HAS_STATUS]->(s:Status)
+WHERE s.type = "open"
+RETURN u.username, collect(t.name) as active_tasks
+
+// 2. วิเคราะห์ workload ในแต่ละ space
+MATCH (s:Space)<-[:IN_SPACE]-(l:List)<-[:BELONGS_TO]-(t:Task)
+WITH s, sum(t.points) as total_points, count(t) as task_count
+RETURN s.name, total_points, task_count
+
+// 3. หา bottleneck tasks (tasks ที่มี dependencies เยอะ)
+MATCH (t:Task)<-[:DEPENDS_ON]-(dependent:Task)
+WITH t, count(dependent) as dependent_count
+WHERE dependent_count > 1
+RETURN t.name, dependent_count
+ORDER BY dependent_count DESC
+
+// 4. ติดตาม progress ของ sprint
+MATCH (sprint:Sprint)<-[:IN_SPRINT]-(t:Task)-[:HAS_STATUS]->(s:Status)
+WITH sprint, s.status, count(t) as task_count, sum(t.points) as points
+RETURN sprint.name, s.status, task_count, points

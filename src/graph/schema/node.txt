@@ -1,0 +1,102 @@
+// Task Node - ข้อมูลหลักของ task
+(:Task {
+  id: string,           // ClickUp task ID
+  name: string,         // ชื่อ task
+  description: string,  // รายละเอียด
+  status: string,       // COMPLETE, REVIEW, DEV-IN PROGRESS
+  priority: string,     // High, Medium, Low, Urgent
+  points: integer,      // story points/effort
+  due_date: datetime,   // deadline
+  start_date: datetime, // วันที่เริ่มงาน
+  created_at: datetime,
+  updated_at: datetime,
+  url: string,          // ClickUp task URL
+  custom_id: string,    // custom task ID ถ้ามี
+  time_estimate: integer, // estimated time in minutes
+  time_tracked: integer,  // actual time tracked
+  archived: boolean,
+  watchers: [string]    // array ของ user IDs ที่ follow
+})
+
+// User Node - ข้อมูลสมาชิกทีม
+(:User {
+  id: string,           // ClickUp user ID
+  username: string,     // username
+  email: string,        // email
+  profile_picture: string, // avatar URL
+  role: string,         // admin, member, guest
+  color: string,        // user color in ClickUp
+  initials: string,     // ตัวอักษรย่อ
+  timezone: string,     // timezone
+  last_active: datetime
+})
+
+// Space Node - workspace/team space
+(:Space {
+  id: string,           // ClickUp space ID
+  name: string,         // Lab, Academy, Tech, etc.
+  color: string,        // space color
+  private: boolean,
+  avatar: string,       // space avatar
+  multiple_assignees: boolean,
+  features: [string]    // enabled features
+})
+
+// Folder Node - การจัดกลุ่ม tasks
+(:Folder {
+  id: string,
+  name: string,
+  orderindex: integer,
+  override_statuses: boolean,
+  hidden: boolean,
+  space_id: string
+})
+
+// List Node - รายการ tasks (เทียบเท่า project)
+(:List {
+  id: string,
+  name: string,         // Get Shit Done, PADTAI, etc.
+  orderindex: integer,
+  content: string,      // description
+  status: string,       // active, archived
+  priority: integer,
+  assignee: string,     // default assignee
+  due_date: datetime,   // list deadline
+  start_date: datetime,
+  color: string,
+  avatar: string
+})
+
+// Status Node - สถานะของ task
+(:Status {
+  id: string,
+  status: string,       // COMPLETE, REVIEW, etc.
+  type: string,         // open, closed, custom
+  orderindex: integer,
+  color: string
+})
+
+// Priority Node - ความสำคัญ
+(:Priority {
+  id: string,
+  priority: string,     // urgent, high, normal, low
+  color: string,
+  orderindex: integer
+})
+
+// Tag Node - ป้ายกำกับ
+(:Tag {
+  name: string,
+  tag_fg: string,       // foreground color
+  tag_bg: string,       // background color
+  creator: string       // user ID ที่สร้าง
+})
+
+// Sprint/Milestone Node
+(:Sprint {
+  id: string,
+  name: string,         // Sprint 30, Sprint 7-11 jul 2025
+  start_date: datetime,
+  end_date: datetime,
+  description: string
+})

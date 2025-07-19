@@ -5,18 +5,14 @@ Tests all filtering functions: by status, overdue, assignee, and tag
 """
 
 import asyncio
-import os
 import sys
 from pathlib import Path
-
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.integrations.clickup_client import AsyncClickUpClient
+from src.utils.config import get_clickup_config
 
 
 class AsyncTestRunner:
@@ -171,9 +167,10 @@ class AsyncTestRunner:
 
 async def main():
     """Main test function"""
-    api_key = os.getenv("CLICKUP_API_KEY")
+    config = get_clickup_config()
+    api_key = config.get("api_key")
     if not api_key:
-        print("❌ Please set CLICKUP_API_KEY environment variable")
+        print("❌ Please set clickup.api_key in config.yaml")
         return
 
     async with AsyncClickUpClient(api_key) as client:
