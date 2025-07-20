@@ -83,20 +83,4 @@
   color: string,
   orderindex: integer
 })
-
-// Tag Node - ป้ายกำกับ
-(:Tag {
-  name: string,
-  tag_fg: string,       // foreground color
-  tag_bg: string,       // background color
-  creator: string       // user ID ที่สร้าง
-})
-
-// Sprint/Milestone Node
-(:Sprint {
-  id: string,
-  name: string,         // Sprint 30, Sprint 7-11 jul 2025
-  start_date: datetime,
-  end_date: datetime,
-  description: string
-})
+ 

@@ -8,5 +8,29 @@ neo4j:
   uri: "neo4j+s://xxx.databases.neo4j.io"
   username: "xxx"
   password: "xxx"
+
+# Discord Bot Configuration
+discord:
+  token: "your_discord_bot_token_here"
+
+# Webhook Server Configuration
+webhooks:
+  enabled: true
+  host: "0.0.0.0"  # Host to bind webhook server
+  port: 8000       # Port for webhook server
+  
+  # Provider-specific configurations
+  providers:
+    clickup:
+      enabled: true
+      webhook_secret: "your_clickup_webhook_secret"
+    
+    discord:
+      enabled: false  # Disabled by default
+      webhook_secret: "your_discord_webhook_secret"
+    
+    github:
+      enabled: false  # Disabled by default  
+      webhook_secret: "your_github_webhook_secret"
  
  

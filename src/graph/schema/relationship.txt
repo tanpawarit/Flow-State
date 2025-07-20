@@ -12,6 +12,7 @@
 (Task)-[:BELONGS_TO]->(List)
 (List)-[:IN_FOLDER]->(Folder)
 (Folder)-[:IN_SPACE]->(Space)
+(List)-[:IN_SPACE]->(Space)
 (Task)-[:IN_SPRINT]->(Sprint)
 
 // Status & Metadata

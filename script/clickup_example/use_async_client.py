@@ -79,7 +79,7 @@ async def main():
             print(f"   {i}. {lst.name} (ID: {lst.id})")
 
         # Use first list for testing
-        test_list = lists[0]
+        test_list = lists[1]
         print(f"\n🔍 Testing with list: {test_list.name}")
         print()
 
@@ -87,8 +87,8 @@ async def main():
         print("🔍 Testing AsyncClickUpClient methods:")
 
         # 1. Filter by status
-        todo_tasks = await client.get_all_tasks_by_status(test_list.id, "todo")
-        print(f"   📋 TODO tasks: {len(todo_tasks)}")
+        dev_tasks = await client.get_all_tasks_by_status(test_list.id, "dev")
+        print(f"   📋 dev tasks: {len(dev_tasks)}")
 
         # 2. Get overdue tasks
         overdue = await client.get_overdue_tasks(test_list.id)

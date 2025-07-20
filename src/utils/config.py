@@ -94,3 +94,27 @@ def reload_config() -> None:
     global _config_cache
     _config_cache = None
     logger.info("Configuration cache cleared")
+
+
+class Config:
+    """Configuration class for accessing YAML configuration values."""
+
+    @staticmethod
+    def get(config_path: str | None = None) -> Dict[str, Any]:
+        """Load and return configuration from a YAML file."""
+        return get_config(config_path)
+
+    @staticmethod
+    def get_clickup() -> Dict[str, Any]:
+        """Get ClickUp configuration."""
+        return get_clickup_config()
+
+    @staticmethod
+    def get_neo4j() -> Dict[str, Any]:
+        """Get Neo4j configuration."""
+        return get_neo4j_config()
+
+    @staticmethod
+    def reload() -> None:
+        """Force reload configuration from file."""
+        reload_config()

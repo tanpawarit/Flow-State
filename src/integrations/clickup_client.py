@@ -6,7 +6,7 @@ Comprehensive client for interacting with ClickUp's REST API
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
@@ -58,12 +58,19 @@ class ClickUpTask(BaseModel):
     start_date: Optional[str] = None
     priority: Optional[Union[str, Dict[str, Any]]] = None
     assignees: List[Dict[str, Any]] = Field(default_factory=list)
+    parent: Optional[str] = None
+    subtasks: List[Dict[str, Any]] = Field(default_factory=list)
     tags: List[Dict[str, Any]] = Field(default_factory=list)
     custom_fields: List[Dict[str, Any]] = Field(default_factory=list)
     list_id: str = ""
     folder_id: str = ""
     space_id: str = ""
     url: str = ""
+    team_id: Optional[str] = None
+    creator: Optional[Dict[str, Any]] = None
+    watchers: List[Dict[str, Any]] = Field(default_factory=list)
+    time_estimate: Optional[int] = None
+    time_spent: Optional[int] = None
 
 
 class ClickUpList(BaseModel):
@@ -284,6 +291,14 @@ class ClickUpClient:
         )
         return [ClickUpList(**lst) for lst in data.get("lists", [])]
 
+    async def get_space_lists(
+        self, space_id: str, archived: bool = False
+    ) -> List[ClickUpList]:
+        """Get lists for a space (lists without folders)"""
+        params = {"archived": str(archived).lower()}
+        data = await self._make_request("GET", f"/space/{space_id}/list", params=params)
+        return [ClickUpList(**lst) for lst in data.get("lists", [])]
+
     async def get_list(self, list_id: str) -> ClickUpList:
         """Get a specific list"""
         data = await self._make_request("GET", f"/list/{list_id}")
@@ -439,6 +454,68 @@ class ClickUpClient:
 class AsyncClickUpClient:
     """High-level async client with convenience methods"""
 
+    async def get_teams(self) -> List[ClickUpTeam]:
+        """Return teams accessible with API key."""
+        return await self.client.get_teams()
+
+    async def get_spaces(
+        self, team_id: str, archived: bool = False
+    ) -> List[ClickUpSpace]:
+        """Get spaces for a team.
+
+        Args:
+            team_id: ID of the team
+            archived: Whether to include archived spaces
+
+        Returns:
+            List of ClickUpSpace objects
+        """
+        return await self.client.get_spaces(team_id, archived=archived)
+
+    async def get_lists(
+        self, folder_id: str, archived: bool = False
+    ) -> List[ClickUpList]:
+        """Get lists in a folder.
+
+        Args:
+            folder_id: ID of the folder
+            archived: Whether to include archived lists
+
+        Returns:
+            List of ClickUpList objects
+        """
+        return await self.client.get_lists(folder_id, archived=archived)
+
+    async def get_space_lists(
+        self, space_id: str, archived: bool = False
+    ) -> List[ClickUpList]:
+        """Get lists directly from a space.
+
+        Args:
+            space_id: ID of the space
+            archived: Whether to include archived lists
+
+        Returns:
+            List of ClickUpList objects
+        """
+        return await self.client.get_space_lists(space_id, archived=archived)
+
+    async def get_folders(
+        self, space_id: str, archived: bool = False
+    ) -> List[ClickUpFolder]:
+        """Get folders in a space.
+
+        Args:
+            space_id: ID of the space
+            archived: Whether to include archived folders
+
+        Returns:
+            List of ClickUpFolder objects
+        """
+        return await self.client.get_folders(space_id, archived=archived)
+
+    """High-level async client with convenience methods"""
+
     def __init__(self, api_key: Optional[str] = None):
         self.client = ClickUpClient(api_key)
 
@@ -455,23 +532,48 @@ class AsyncClickUpClient:
         """Get all tasks with specific status"""
         all_tasks = await self.client.get_tasks(list_id, include_closed=True)
         return [
-            task for task in all_tasks if str(task.status).lower() == status.lower()
+            task
+            for task in all_tasks
+            if task.status
+            and (
+                task.status.get("status", "").lower() == status.lower()
+                if isinstance(task.status, dict)
+                else str(task.status).lower() == status.lower()
+            )
         ]
 
     async def get_overdue_tasks(self, list_id: str) -> List[ClickUpTask]:
         """Get all overdue tasks"""
         all_tasks = await self.client.get_tasks(list_id)
         overdue_tasks = []
+        now = datetime.now(timezone.utc)
 
         for task in all_tasks:
             if task.due_date:
                 try:
-                    due_date = datetime.fromisoformat(
-                        task.due_date.replace("Z", "+00:00")
-                    )
-                    if due_date < datetime.now(due_date.tzinfo):
+                    # Convert to timestamp in seconds (from milliseconds)
+                    try:
+                        # First try to convert to int in case it's a string timestamp
+                        timestamp_ms = int(task.due_date)
+                        due_date = datetime.fromtimestamp(
+                            timestamp_ms / 1000, timezone.utc
+                        )
+                    except (ValueError, TypeError):
+                        # If conversion to int fails, try parsing as ISO format string
+                        try:
+                            due_date_str = str(task.due_date)
+                            if due_date_str.endswith("Z"):
+                                due_date_str = due_date_str[:-1] + "+00:00"
+                            due_date = datetime.fromisoformat(due_date_str)
+                            if due_date.tzinfo is None:
+                                due_date = due_date.replace(tzinfo=timezone.utc)
+                        except Exception:
+                            continue
+
+                    if due_date < now:
                         overdue_tasks.append(task)
-                except (ValueError, OSError):
+
+                except Exception:
                     continue
 
         return overdue_tasks
@@ -489,5 +591,37 @@ class AsyncClickUpClient:
 
     async def get_tasks_by_tag(self, list_id: str, tag: str) -> List[ClickUpTask]:
         """Get tasks with specific tag"""
-        all_tasks = await self.client.get_tasks(list_id)
-        return [task for task in all_tasks if tag in [t.get("name") for t in task.tags]]
+        tasks_data = await self.client.get_tasks(list_id, tags=[tag])
+        return tasks_data
+
+    async def get_tasks(
+        self,
+        list_id: str,
+        include_closed: bool = False,
+        assignees: Optional[List[str]] = None,
+        statuses: Optional[List[str]] = None,
+        tags: Optional[List[str]] = None,
+        limit: int = 100,
+    ) -> List[ClickUpTask]:
+        """Get tasks from a list.
+
+        Args:
+            list_id: ID of the list
+            include_closed: Whether to include closed tasks
+            assignees: List of assignee IDs to filter by
+            statuses: List of statuses to filter by
+            tags: List of tags to filter by
+            limit: Maximum number of tasks to return
+
+        Returns:
+            List of ClickUpTask objects
+        """
+        tasks_data = await self.client.get_tasks(
+            list_id=list_id,
+            include_closed=include_closed,
+            assignees=assignees,
+            statuses=statuses,
+            tags=tags,
+            limit=limit,
+        )
+        return tasks_data

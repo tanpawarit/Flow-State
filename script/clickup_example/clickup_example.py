@@ -332,7 +332,9 @@ class ClickUpExample:
             print(
                 f"  Folders: {sum(len(f) for f in hierarchy['folders'].values())} folders"
             )
-            print(f"  Lists: {sum(len(l) for l in hierarchy['lists'].values())} lists")
+            print(
+                f"  Lists: {sum(len(lists) for lists in hierarchy['lists'].values())} lists"
+            )
             print(f"  Tasks: {sum(len(t) for t in hierarchy['tasks'].values())} tasks")
         except Exception as e:
             self.printer.print_warning(f"Hierarchy failed: {e}")

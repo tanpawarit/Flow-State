@@ -47,7 +47,9 @@ class Neo4jClient:
         if self.driver:
             self.driver.close()
 
-    def execute_read(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def execute_read(
+        self, query: str, parameters: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
         """Execute read query"""
         with self.driver.session() as session:
             try:
@@ -57,7 +59,9 @@ class Neo4jClient:
                 logging.error(f"Read query failed: {e}")
                 return []
 
-    def execute_write(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> bool:
+    def execute_write(
+        self, query: str, parameters: Optional[Dict[str, Any]] = None
+    ) -> bool:
         """Execute write query"""
         with self.driver.session() as session:
             try:
