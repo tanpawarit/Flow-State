@@ -110,6 +110,7 @@ class ClickUpEventHandler:
             SET t.status = $status,
                 t.updated_at = datetime()
             
+            WITH t
             // Update status relationship
             OPTIONAL MATCH (t)-[r:HAS_STATUS]->(:Status)
             DELETE r
@@ -186,6 +187,7 @@ class ClickUpEventHandler:
             SET t.priority = $priority,
                 t.updated_at = datetime()
             
+            WITH t
             // Update priority relationship
             OPTIONAL MATCH (t)-[r:HAS_PRIORITY]->(:Priority)
             DELETE r
@@ -315,8 +317,17 @@ class ClickUpEventHandler:
 
         if isinstance(status, dict):
             status = status.get("status", "")
+        elif hasattr(status, 'status'):
+            status = status.status
+        else:
+            status = str(status) if status else ""
+            
         if isinstance(priority, dict):
             priority = priority.get("priority", "")
+        elif hasattr(priority, 'priority'):
+            priority = priority.priority
+        else:
+            priority = str(priority) if priority else ""
 
         parameters = {
             "id": task.id,
@@ -357,6 +368,10 @@ class ClickUpEventHandler:
             status = task.status
             if isinstance(status, dict):
                 status = status.get("status", "")
+            elif hasattr(status, 'status'):
+                status = status.status
+            else:
+                status = str(status) if status else ""
 
             if status:
                 query = """
@@ -373,6 +388,10 @@ class ClickUpEventHandler:
             priority = task.priority
             if isinstance(priority, dict):
                 priority = priority.get("priority", "")
+            elif hasattr(priority, 'priority'):
+                priority = priority.priority
+            else:
+                priority = str(priority) if priority else ""
 
             if priority:
                 query = """
