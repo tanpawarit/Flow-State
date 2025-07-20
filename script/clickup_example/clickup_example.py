@@ -12,7 +12,7 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.integrations.clickup_client import ClickUpClient
+from src.integrations.clickup.client import ClickUpClient
 from src.utils.config import get_clickup_config
 
 
@@ -368,17 +368,17 @@ def print_all_functions():
         # Search & Utilities
         ("ClickUpClient.search_tasks(query)", "Search for tasks"),
         ("ClickUpClient.get_hierarchy(team_id)", "Get complete team structure"),
-        # Async Client Convenience
+        # ClickUpClient filtering capabilities
         (
-            "AsyncClickUpClient.get_all_tasks_by_status(list_id, status)",
+            "ClickUpClient.get_tasks(list_id, statuses=[status])",
             "Filter tasks by status",
         ),
-        ("AsyncClickUpClient.get_overdue_tasks(list_id)", "Get overdue tasks"),
+        ("Manual overdue detection using ClickUpClient.get_tasks()", "Get overdue tasks"),
         (
-            "AsyncClickUpClient.get_tasks_by_assignee(list_id, assignee_id)",
+            "ClickUpClient.get_tasks(list_id, assignees=[assignee_id])",
             "Filter by assignee",
         ),
-        ("AsyncClickUpClient.get_tasks_by_tag(list_id, tag)", "Filter by tag"),
+        ("ClickUpClient.get_tasks(list_id, tags=[tag])", "Filter by tag"),
     ]
 
     for func, description in functions:

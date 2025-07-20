@@ -6,8 +6,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from src.graph.neo4j_client import Neo4jClient
-from src.integrations.clickup_client import ClickUpClient
+from src.integrations.neo4j.client import Neo4jClient
+from src.integrations.clickup.client import ClickUpClient
 from src.webhooks.providers.clickup.handlers import ClickUpEventHandler
 from src.webhooks.providers.clickup.models import ClickUpWebhookEvent
 from src.webhooks.shared.base_models import (

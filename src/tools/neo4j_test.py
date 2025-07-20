@@ -7,10 +7,10 @@ import logging
 import sys
 from pathlib import Path
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from graph.neo4j_client import Neo4jClient
+from src.integrations.neo4j.client import Neo4jClient
 
 # Configure logging
 logging.basicConfig(
