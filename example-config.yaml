@@ -18,19 +18,15 @@ webhooks:
   enabled: true
   host: "0.0.0.0"  # Host to bind webhook server
   port: 8000       # Port for webhook server
+  public_url: "https://your-domain.com"  # Public URL for ClickUp webhooks
   
-  # Provider-specific configurations
-  providers:
-    clickup:
-      enabled: true
-      webhook_secret: "your_clickup_webhook_secret"
-    
-    discord:
-      enabled: false  # Disabled by default
-      webhook_secret: "your_discord_webhook_secret"
-    
-    github:
-      enabled: false  # Disabled by default  
-      webhook_secret: "your_github_webhook_secret"
+  # ngrok Configuration
+  ngrok:
+    enabled: true
+    authtoken: "xxxxx"
+    region: "us"  # us, eu, ap, au, sa, jp, in
+    inspect: true  # Enable ngrok web interface
+    log_level: "info"
+ 
  
  

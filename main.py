@@ -10,9 +10,9 @@ import signal
 import sys
 from typing import Optional
 
+from src.bot.discord_bot import DiscordBot
 from src.utils.config import Config
 from src.webhooks.core.webhook_server import WebhookServer
-from src.bot.discord_bot import DiscordBot
 
 # Configure logging
 logging.basicConfig(

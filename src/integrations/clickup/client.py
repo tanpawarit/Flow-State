@@ -313,25 +313,48 @@ class ClickUpClient:
         tags: Optional[List[str]] = None,
         limit: int = 100,
     ) -> List[ClickUpTask]:
-        """Get tasks for a list"""
-        params: Dict[str, Union[str, List[str]]] = {
-            "archived": "false",
-            "page": "0",
-            "subtasks": "true",
-            "include_closed": str(include_closed).lower(),
-        }
+        """Get tasks for a list with automatic pagination"""
+        all_tasks = []
+        page = 0
+        page_size = min(limit, 100)  # ClickUp max page size is 100
+        
+        while len(all_tasks) < limit:
+            params: Dict[str, Union[str, List[str]]] = {
+                "archived": "false",
+                "page": str(page),
+                "subtasks": "true",
+                "include_closed": str(include_closed).lower(),
+                "limit": str(page_size),
+            }
 
-        if assignees:
-            params["assignees[]"] = assignees
-        if statuses:
-            params["statuses[]"] = statuses
-        if tags:
-            params["tags[]"] = tags
-        if limit:
-            params["limit"] = str(limit)
+            if assignees:
+                params["assignees[]"] = assignees
+            if statuses:
+                params["statuses[]"] = statuses
+            if tags:
+                params["tags[]"] = tags
 
-        data = await self._make_request("GET", f"/list/{list_id}/task", params=params)
-        return [ClickUpTask(**task) for task in data.get("tasks", [])]
+            data = await self._make_request("GET", f"/list/{list_id}/task", params=params)
+            tasks = data.get("tasks", [])
+            
+            if not tasks:
+                # No more tasks to fetch
+                break
+                
+            all_tasks.extend(tasks)
+            
+            # If we got fewer tasks than requested, we've reached the end
+            if len(tasks) < page_size:
+                break
+                
+            page += 1
+            
+            # Adjust page size for final page if needed
+            remaining = limit - len(all_tasks)
+            if remaining < page_size:
+                page_size = remaining
+
+        return [ClickUpTask(**task) for task in all_tasks[:limit]]
 
     async def get_task(self, task_id: str) -> ClickUpTask:
         """Get a specific task"""
