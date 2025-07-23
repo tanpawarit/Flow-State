@@ -1,5 +1,12 @@
 """Graph data import operations."""
 
+import sys
+from pathlib import Path
+
+# Add project root to path for direct execution
+project_root = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 import logging
 import time
 from datetime import datetime, timezone
@@ -28,6 +35,7 @@ class SyncStats(BaseModel):
     tasks_synced: int = 0
     users_synced: int = 0
     relationships_created: int = 0
+    subtask_relationships_created: int = 0
     errors: List[str] = []
     start_time: datetime = datetime.now()
     end_time: Optional[datetime] = None
@@ -431,9 +439,52 @@ class InvesticDataImporter:
                         self.execute_cypher(assign_query, assign_params)
                         self.stats.relationships_created += 1
 
+        # Create subtask relationships after all tasks are created
+        self.create_subtask_relationships(tasks_by_list)
+
         logger.info(
-            f"✅ Created {self.stats.tasks_synced} tasks with {self.stats.relationships_created} assignments"
+            f"✅ Created {self.stats.tasks_synced} tasks with {self.stats.relationships_created} assignments and {self.stats.subtask_relationships_created} subtask relationships"
         )
+
+    def create_subtask_relationships(self, tasks_by_list: Dict[str, List[ClickUpTask]]):
+        """Create SUBTASK_OF relationships between parent and child tasks"""
+        logger.info("🔗 Creating subtask relationships...")
+        
+        for list_id, tasks in tasks_by_list.items():
+            if list_id not in self.TARGET_LISTS:
+                continue
+                
+            logger.info(f"   Processing subtask relationships for {self.TARGET_LISTS[list_id]}")
+            
+            for task in tasks:
+                # Check if this task has a parent (making it a subtask)
+                if task.parent:
+                    try:
+                        query = """
+                        MATCH (parent:Task {id: $parent_id})
+                        MATCH (subtask:Task {id: $subtask_id})
+                        MERGE (subtask)-[r:SUBTASK_OF]->(parent)
+                        SET r.created_at = datetime()
+                        RETURN r
+                        """
+                        
+                        params = {
+                            "parent_id": task.parent,
+                            "subtask_id": task.id
+                        }
+                        
+                        result = self.execute_cypher(query, params)
+                        if result:  # Relationship was created successfully
+                            self.stats.subtask_relationships_created += 1
+                            logger.debug(f"Created SUBTASK_OF relationship: {task.name} -> {task.parent}")
+                            
+                    except Exception as e:
+                        error_msg = f"Failed to create subtask relationship for task {task.id} -> {task.parent}: {e}"
+                        logger.warning(error_msg)
+                        self.stats.errors.append(error_msg)
+                        # Continue processing other relationships even if one fails
+        
+        logger.info(f"✅ Created {self.stats.subtask_relationships_created} subtask relationships")
 
     async def sync_investic_data(self, full_sync: bool = True):
         """Main sync function"""
@@ -489,7 +540,7 @@ class InvesticDataImporter:
 
                 logger.info("✅ Sync completed successfully!")
                 logger.info(
-                    f"📊 Stats: {self.stats.tasks_synced} tasks, {self.stats.users_synced} users, {self.stats.relationships_created} relationships"
+                    f"📊 Stats: {self.stats.tasks_synced} tasks, {self.stats.users_synced} users, {self.stats.relationships_created} assignments, {self.stats.subtask_relationships_created} subtask relationships"
                 )
                 logger.info(f"⏱️  Duration: {self.stats.duration():.1f} seconds")
 
@@ -501,3 +552,20 @@ class InvesticDataImporter:
                 self.stats.errors.append(error_msg)
                 self.stats.end_time = datetime.now()
                 raise
+
+
+if __name__ == "__main__":
+    import asyncio
+    from src.utils.config import get_config
+    
+    async def main():
+        config = get_config()
+        importer = InvesticDataImporter(
+            clickup_api_key=config['clickup']['api_key'],
+            neo4j_uri=config['neo4j']['uri'],
+            neo4j_username=config['neo4j']['username'],
+            neo4j_password=config['neo4j']['password']
+        )
+        await importer.sync_investic_data()
+    
+    asyncio.run(main())

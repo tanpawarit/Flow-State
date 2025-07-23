@@ -403,6 +403,18 @@ class ClickUpEventHandler:
                     query, {"task_id": task.id, "priority": priority}
                 )
 
+        # Create parent relationship if task has a parent (SUBTASK_OF)
+        if getattr(task, 'parent', None):
+            query = """
+            MATCH (subtask:Task {id: $subtask_id})
+            MATCH (parent:Task {id: $parent_id})
+            MERGE (subtask)-[:SUBTASK_OF]->(parent)
+            SET subtask.updated_at = datetime()
+            """
+            self.neo4j_client.execute_write(
+                query, {"subtask_id": task.id, "parent_id": task.parent}
+            )
+
     async def _update_task_relationships(
         self, task: Any, event: ClickUpWebhookEvent
     ) -> None:
