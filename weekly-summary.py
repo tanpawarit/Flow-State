@@ -30,30 +30,32 @@ GET_SHIT_DONE_LIST_ID = "901602625750"
 TARGET_LISTS = [PADTAI_LIST_ID, GET_SHIT_DONE_LIST_ID]
 
 
-def get_tasks_in_progress_by_list(list_id: str) -> List[Dict[str, Any]]:
+def get_tasks_by_status(list_id: str, target_statuses: List[str]) -> List[Dict[str, Any]]:
     """
-    Get tasks currently in progress from a specific list.
+    Get tasks with specific statuses from a list.
 
     Args:
         list_id: The list ID to get tasks from
+        target_statuses: List of status names to filter by
 
     Returns:
-        List of tasks in progress with assignee, progress info, and subtask hierarchy
+        List of tasks matching the statuses with assignee, progress info, and subtask hierarchy
     """
     client = Neo4jClient()
 
-    query = """
+    # Build status condition from target_statuses list
+    status_conditions = [f"toLower(t.status) = '{status.lower()}'" for status in target_statuses]
+    status_condition = f"({' OR '.join(status_conditions)}) AND NOT t.status IN ['complete', 'closed', 'done']"
+    
+    subtask_conditions = [f"toLower(subtask.status) = '{status.lower()}'" for status in target_statuses]
+    subtask_condition = f"({' OR '.join(subtask_conditions)}) AND NOT subtask.status IN ['complete', 'closed', 'done']"
+
+    query = f"""
     // First, get tasks that directly match the status criteria
-    CALL () {
+    CALL () {{
         MATCH (t:Task)
         WHERE t.list_id = $list_id
-          AND (
-              toLower(t.status) CONTAINS 'review'
-              OR (toLower(t.status) CONTAINS 'dev' AND toLower(t.status) CONTAINS 'review')
-          )
-          AND NOT toLower(t.status) CONTAINS 'ready'
-          AND NOT toLower(t.status) = 'ready to dev'
-          AND NOT t.status IN ['complete', 'closed', 'done']
+          AND {status_condition}
         RETURN t
         
         UNION
@@ -61,19 +63,14 @@ def get_tasks_in_progress_by_list(list_id: str) -> List[Dict[str, Any]]:
         // Second, get parent tasks that have subtasks matching the criteria
         MATCH (parent:Task)
         WHERE parent.list_id = $list_id
-          AND EXISTS {
+          AND NOT parent.status IN ['complete', 'closed', 'done']
+          AND EXISTS {{
               MATCH (subtask:Task)-[:SUBTASK_OF]->(parent)
               WHERE subtask.list_id = $list_id
-                AND (
-                    toLower(subtask.status) CONTAINS 'review'
-                    OR (toLower(subtask.status) CONTAINS 'dev' AND toLower(subtask.status) CONTAINS 'review')
-                )
-                AND NOT toLower(subtask.status) CONTAINS 'ready'
-                AND NOT toLower(subtask.status) = 'ready to dev'
-                AND NOT subtask.status IN ['complete', 'closed', 'done']
-          }
+                AND {subtask_condition}
+          }}
         RETURN parent as t
-    }
+    }}
     
     // Now get the relationships for all selected tasks
     OPTIONAL MATCH (u:User)-[:ASSIGNED_TO]->(t)
@@ -83,13 +80,7 @@ def get_tasks_in_progress_by_list(list_id: str) -> List[Dict[str, Any]]:
     // Get active subtasks for the selected tasks
     OPTIONAL MATCH (subtask:Task)-[:SUBTASK_OF]->(t)
     WHERE subtask.list_id = $list_id
-      AND (
-          toLower(subtask.status) CONTAINS 'review'
-          OR (toLower(subtask.status) CONTAINS 'dev' AND toLower(subtask.status) CONTAINS 'review')
-      )
-      AND NOT toLower(subtask.status) CONTAINS 'ready'
-      AND NOT toLower(subtask.status) = 'ready to dev'
-      AND NOT subtask.status IN ['complete', 'closed', 'done']
+      AND {subtask_condition}
     OPTIONAL MATCH (su:User)-[:ASSIGNED_TO]->(subtask)
     
     WITH t, parent, assigned_users, 
@@ -160,6 +151,44 @@ def get_tasks_in_progress_by_list(list_id: str) -> List[Dict[str, Any]]:
         return processed_tasks
     except Exception as e:
         logger.error(f"Failed to get weekly tasks in dev: {e}")
+        return []
+
+
+def get_padtai_dev_tasks() -> List[Dict[str, Any]]:
+    """Get PADTAI tasks in 'dev' status."""
+    return get_tasks_by_status(PADTAI_LIST_ID, ['dev'])
+
+
+def get_padtai_review_tasks() -> List[Dict[str, Any]]:
+    """Get PADTAI tasks in 'review' status."""
+    return get_tasks_by_status(PADTAI_LIST_ID, ['review'])
+
+
+def get_gsd_dev_tasks() -> List[Dict[str, Any]]:
+    """Get Get Shit Done tasks in 'dev - in progress' status."""
+    return get_tasks_by_status(GET_SHIT_DONE_LIST_ID, ['dev - in progress'])
+
+
+def get_gsd_review_tasks() -> List[Dict[str, Any]]:
+    """Get Get Shit Done tasks in 'review' status."""
+    return get_tasks_by_status(GET_SHIT_DONE_LIST_ID, ['review'])
+
+
+def get_tasks_in_progress_by_list(list_id: str) -> List[Dict[str, Any]]:
+    """
+    Get tasks currently in progress from a specific list (combines dev and review).
+    
+    Args:
+        list_id: The list ID to get tasks from
+
+    Returns:
+        List of tasks in progress with assignee, progress info, and subtask hierarchy
+    """
+    if list_id == PADTAI_LIST_ID:
+        return get_tasks_by_status(list_id, ['dev', 'review'])
+    elif list_id == GET_SHIT_DONE_LIST_ID:
+        return get_tasks_by_status(list_id, ['dev - in progress', 'review'])
+    else:
         return []
 
 
@@ -401,22 +430,26 @@ def get_timeline_status(progress_data: Dict[str, Any]) -> str:
 
 
 def format_weekly_summary(
-    padtai_tasks: List[Dict[str, Any]],
-    get_shit_done_tasks: List[Dict[str, Any]],
+    padtai_dev_tasks: List[Dict[str, Any]],
+    padtai_review_tasks: List[Dict[str, Any]],
+    gsd_dev_tasks: List[Dict[str, Any]],
+    gsd_review_tasks: List[Dict[str, Any]],
     progress_data: Dict[str, Any],
     most_supporter: List[Dict[str, Any]],
 ) -> str:
     """
-    Format all data into separate weekly summary sections.
+    Format all data into separate weekly summary sections with status separation.
 
     Args:
-        padtai_tasks: List of PADTAI tasks in progress
-        get_shit_done_tasks: List of Get Shit Done tasks in progress
+        padtai_dev_tasks: List of PADTAI tasks in 'dev' status
+        padtai_review_tasks: List of PADTAI tasks in 'review' status
+        gsd_dev_tasks: List of Get Shit Done tasks in 'dev - in progress' status
+        gsd_review_tasks: List of Get Shit Done tasks in 'review' status
         progress_data: Progress statistics (with separate list data)
         most_supporter: Team members with most task relationships
 
     Returns:
-        Formatted weekly summary string with separate sections
+        Formatted weekly summary string with separate status sections
     """
     # Calculate date range for current week
     today = datetime.now()
@@ -473,11 +506,45 @@ def format_weekly_summary(
 🤝 **Most Supporter** (Team Collaborators):
 {supporter_text.rstrip()}
 
-📋 **PADTAI List** 
-🔄 **In Progress** ({len(padtai_tasks)} tasks, {sum(len([st for st in task.get("subtasks", []) if st.get("id")]) for task in padtai_tasks)} subtasks):"""
+📋 **PADTAI List**"""
 
-    # Add PADTAI tasks
-    for task in padtai_tasks[:]:  # Show top 5 PADTAI tasks
+    # Add PADTAI dev tasks section
+    padtai_dev_subtasks = sum(len([st for st in task.get("subtasks", []) if st.get("id")]) for task in padtai_dev_tasks)
+    summary += f"\n🔄 **[dev]** ({len(padtai_dev_tasks)} tasks, {padtai_dev_subtasks} subtasks):"
+    
+    for task in padtai_dev_tasks[:10]:  # Show top 10 PADTAI dev tasks
+        task_name = task["task_name"]
+        assignees = (
+            ", ".join(task["assigned_users"])
+            if task["assigned_users"]
+            else "Unassigned"
+        )
+        status = task["status"]
+
+        # Show parent relationship if this is a subtask
+        parent_indicator = (
+            f" (subtask of: {task['parent_name']})" if task.get("parent_name") else ""
+        )
+
+        summary += f"\n• {task_name} [{status}] ({assignees}){parent_indicator}"
+
+        # Show subtasks if any
+        subtasks = task.get("subtasks", [])
+        for subtask in subtasks:
+            if subtask.get("id"):  # Check if subtask exists
+                subtask_name = subtask["name"]
+                subtask_assignees = (
+                    ", ".join(subtask["assigned_users"])
+                    if subtask["assigned_users"]
+                    else "Unassigned"
+                )
+                summary += f"\n  └─ {subtask_name} ({subtask_assignees})"
+
+    # Add PADTAI review tasks section
+    padtai_review_subtasks = sum(len([st for st in task.get("subtasks", []) if st.get("id")]) for task in padtai_review_tasks)
+    summary += f"\n\n📝 **[review]** ({len(padtai_review_tasks)} tasks, {padtai_review_subtasks} subtasks):"
+    
+    for task in padtai_review_tasks[:10]:  # Show top 10 PADTAI review tasks
         task_name = task["task_name"]
         assignees = (
             ", ".join(task["assigned_users"])
@@ -507,14 +574,44 @@ def format_weekly_summary(
 
     # Add Get Shit Done section
     summary += "\n\n📋 **Get Shit Done List**"
-    gsd_subtask_count = sum(
-        len([st for st in task.get("subtasks", []) if st.get("id")])
-        for task in get_shit_done_tasks
-    )
-    summary += f"\n🔄 **In Progress** ({len(get_shit_done_tasks)} tasks, {gsd_subtask_count} subtasks):"
+    
+    # Add GSD dev tasks section
+    gsd_dev_subtasks = sum(len([st for st in task.get("subtasks", []) if st.get("id")]) for task in gsd_dev_tasks)
+    summary += f"\n🔄 **[dev - in progress]** ({len(gsd_dev_tasks)} tasks, {gsd_dev_subtasks} subtasks):"
+    
+    for task in gsd_dev_tasks[:10]:  # Show top 10 GSD dev tasks
+        task_name = task["task_name"]
+        assignees = (
+            ", ".join(task["assigned_users"])
+            if task["assigned_users"]
+            else "Unassigned"
+        )
+        status = task["status"]
 
-    # Add Get Shit Done tasks
-    for task in get_shit_done_tasks[:5]:  # Show top 5 Get Shit Done tasks
+        # Show parent relationship if this is a subtask
+        parent_indicator = (
+            f" (subtask of: {task['parent_name']})" if task.get("parent_name") else ""
+        )
+
+        summary += f"\n• {task_name} [{status}] ({assignees}){parent_indicator}"
+
+        # Show subtasks if any
+        subtasks = task.get("subtasks", [])
+        for subtask in subtasks:
+            if subtask.get("id"):  # Check if subtask exists
+                subtask_name = subtask["name"]
+                subtask_assignees = (
+                    ", ".join(subtask["assigned_users"])
+                    if subtask["assigned_users"]
+                    else "Unassigned"
+                )
+                summary += f"\n  └─ {subtask_name} ({subtask_assignees})"
+
+    # Add GSD review tasks section
+    gsd_review_subtasks = sum(len([st for st in task.get("subtasks", []) if st.get("id")]) for task in gsd_review_tasks)
+    summary += f"\n\n📝 **[review]** ({len(gsd_review_tasks)} tasks, {gsd_review_subtasks} subtasks):"
+    
+    for task in gsd_review_tasks[:10]:  # Show top 10 GSD review tasks
         task_name = task["task_name"]
         assignees = (
             ", ".join(task["assigned_users"])
@@ -554,20 +651,24 @@ def generate_weekly_summary() -> str:
     """
     logger.info("Generating weekly summary...")
 
-    # Collect data for each list separately
-    padtai_tasks = get_tasks_in_progress_by_list(PADTAI_LIST_ID)
-    get_shit_done_tasks = get_tasks_in_progress_by_list(GET_SHIT_DONE_LIST_ID)
+    # Collect data for each status separately
+    padtai_dev_tasks = get_padtai_dev_tasks()
+    padtai_review_tasks = get_padtai_review_tasks()
+    gsd_dev_tasks = get_gsd_dev_tasks()
+    gsd_review_tasks = get_gsd_review_tasks()
     progress_data = get_weekly_progress()
     most_supporter = get_most_supporter()
 
-    logger.info(f"Found {len(padtai_tasks)} PADTAI tasks in progress")
-    logger.info(f"Found {len(get_shit_done_tasks)} Get Shit Done tasks in progress")
+    logger.info(f"Found {len(padtai_dev_tasks)} PADTAI dev tasks")
+    logger.info(f"Found {len(padtai_review_tasks)} PADTAI review tasks")
+    logger.info(f"Found {len(gsd_dev_tasks)} GSD dev tasks")
+    logger.info(f"Found {len(gsd_review_tasks)} GSD review tasks")
     logger.info(f"Combined progress: {progress_data['combined']['current_progress']}%")
     logger.info(f"Most supporter: {len(most_supporter)} members")
 
     # Format and return summary
     summary = format_weekly_summary(
-        padtai_tasks, get_shit_done_tasks, progress_data, most_supporter
+        padtai_dev_tasks, padtai_review_tasks, gsd_dev_tasks, gsd_review_tasks, progress_data, most_supporter
     )
     return summary
 
