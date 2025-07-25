@@ -449,13 +449,15 @@ class InvesticDataImporter:
     def create_subtask_relationships(self, tasks_by_list: Dict[str, List[ClickUpTask]]):
         """Create SUBTASK_OF relationships between parent and child tasks"""
         logger.info("🔗 Creating subtask relationships...")
-        
+
         for list_id, tasks in tasks_by_list.items():
             if list_id not in self.TARGET_LISTS:
                 continue
-                
-            logger.info(f"   Processing subtask relationships for {self.TARGET_LISTS[list_id]}")
-            
+
+            logger.info(
+                f"   Processing subtask relationships for {self.TARGET_LISTS[list_id]}"
+            )
+
             for task in tasks:
                 # Check if this task has a parent (making it a subtask)
                 if task.parent:
@@ -467,24 +469,25 @@ class InvesticDataImporter:
                         SET r.created_at = datetime()
                         RETURN r
                         """
-                        
-                        params = {
-                            "parent_id": task.parent,
-                            "subtask_id": task.id
-                        }
-                        
+
+                        params = {"parent_id": task.parent, "subtask_id": task.id}
+
                         result = self.execute_cypher(query, params)
                         if result:  # Relationship was created successfully
                             self.stats.subtask_relationships_created += 1
-                            logger.debug(f"Created SUBTASK_OF relationship: {task.name} -> {task.parent}")
-                            
+                            logger.debug(
+                                f"Created SUBTASK_OF relationship: {task.name} -> {task.parent}"
+                            )
+
                     except Exception as e:
                         error_msg = f"Failed to create subtask relationship for task {task.id} -> {task.parent}: {e}"
                         logger.warning(error_msg)
                         self.stats.errors.append(error_msg)
                         # Continue processing other relationships even if one fails
-        
-        logger.info(f"✅ Created {self.stats.subtask_relationships_created} subtask relationships")
+
+        logger.info(
+            f"✅ Created {self.stats.subtask_relationships_created} subtask relationships"
+        )
 
     async def sync_investic_data(self, full_sync: bool = True):
         """Main sync function"""
@@ -556,16 +559,17 @@ class InvesticDataImporter:
 
 if __name__ == "__main__":
     import asyncio
+
     from src.utils.config import get_config
-    
+
     async def main():
         config = get_config()
         importer = InvesticDataImporter(
-            clickup_api_key=config['clickup']['api_key'],
-            neo4j_uri=config['neo4j']['uri'],
-            neo4j_username=config['neo4j']['username'],
-            neo4j_password=config['neo4j']['password']
+            clickup_api_key=config["clickup"]["api_key"],
+            neo4j_uri=config["neo4j"]["uri"],
+            neo4j_username=config["neo4j"]["username"],
+            neo4j_password=config["neo4j"]["password"],
         )
         await importer.sync_investic_data()
-    
+
     asyncio.run(main())

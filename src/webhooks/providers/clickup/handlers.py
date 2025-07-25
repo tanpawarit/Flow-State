@@ -101,10 +101,16 @@ class ClickUpEventHandler:
         self, event: ClickUpWebhookEvent
     ) -> List[str]:
         """Handle task status change event."""
-        # Get new status from history items
+        # Get old and new status from history items
+        old_status = self._extract_old_value_from_history(event, "status")
         new_status = self._extract_new_value_from_history(event, "status")
 
         if new_status:
+            # Create historical record
+            await self._create_state_history(
+                event.task_id, "status", old_status, new_status, event
+            )
+            
             query = """
             MATCH (t:Task {id: $task_id})
             SET t.status = $status,
@@ -130,6 +136,15 @@ class ClickUpEventHandler:
         self, event: ClickUpWebhookEvent
     ) -> List[str]:
         """Handle task assignee change event."""
+        # Get old and new assignee info from event
+        old_assignee = self._extract_old_value_from_history(event, "assignee")
+        new_assignee = self._extract_new_value_from_history(event, "assignee")
+        
+        # Create historical record
+        await self._create_state_history(
+            event.task_id, "assignee", old_assignee, new_assignee, event
+        )
+        
         # Fetch updated task to get current assignees
         async with self.clickup_client as client:
             task = await client.get_task(event.task_id)
@@ -179,9 +194,15 @@ class ClickUpEventHandler:
         self, event: ClickUpWebhookEvent
     ) -> List[str]:
         """Handle task priority change event."""
+        old_priority = self._extract_old_value_from_history(event, "priority")
         new_priority = self._extract_new_value_from_history(event, "priority")
 
         if new_priority:
+            # Create historical record
+            await self._create_state_history(
+                event.task_id, "priority", old_priority, new_priority, event
+            )
+            
             query = """
             MATCH (t:Task {id: $task_id})
             SET t.priority = $priority,
@@ -466,3 +487,58 @@ class ClickUpEventHandler:
             if item.get("field") == field:
                 return item.get("after", {}).get("value")
         return None
+
+    def _extract_old_value_from_history(
+        self, event: ClickUpWebhookEvent, field: str
+    ) -> Optional[str]:
+        """Extract old value for a field from webhook history items."""
+        for item in event.history_items:
+            if item.get("field") == field:
+                return item.get("before", {}).get("value")
+        return None
+
+    async def _create_state_history(
+        self, 
+        task_id: str, 
+        field: str, 
+        old_value: Optional[str], 
+        new_value: Optional[str], 
+        event: ClickUpWebhookEvent
+    ) -> None:
+        """Create historical record of state changes."""
+        query = """
+        CREATE (h:TaskStateHistory {
+            id: randomUUID(),
+            task_id: $task_id,
+            field_name: $field,
+            old_value: $old_value,
+            new_value: $new_value,
+            changed_at: datetime(),
+            webhook_event_id: $webhook_id,
+            event_type: $event_type,
+            user_id: $user_id
+        })
+        
+        WITH h
+        MATCH (t:Task {id: $task_id})
+        CREATE (t)-[:HAS_HISTORY]->(h)
+        
+        RETURN h.id as history_id
+        """
+        
+        parameters = {
+            "task_id": task_id,
+            "field": field,
+            "old_value": old_value,
+            "new_value": new_value,
+            "webhook_id": event.webhook_id,
+            "event_type": event.event,
+            "user_id": getattr(event, 'user_id', None)
+        }
+        
+        try:
+            result = self.neo4j_client.execute_write(query, parameters)
+            logger.debug(f"Created state history for task {task_id}: {field} changed from '{old_value}' to '{new_value}'")
+        except Exception as e:
+            logger.warning(f"Failed to create state history for task {task_id}: {e}")
+            # Don't fail the main operation if history creation fails
